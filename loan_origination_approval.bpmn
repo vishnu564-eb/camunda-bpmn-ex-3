@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_LoanOrigination"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.20.0">
+
+  <bpmn:collaboration id="Collaboration_LoanOrigination">
+    <bpmn:participant id="Participant_BankSystem" name="Loan Origination &amp; Approval System" processRef="Process_LoanOrigination" />
+    <bpmn:participant id="Participant_CreditBureau" name="External Credit Bureau System" />
+    <bpmn:messageFlow id="MessageFlow_CreditBureauCall" name="Credit Check API Request" sourceRef="ServiceTask_FetchCreditBureau" targetRef="Participant_CreditBureau" />
+    <bpmn:messageFlow id="MessageFlow_CreditBureauResponse" name="Credit Score &amp; Report Response" sourceRef="Participant_CreditBureau" targetRef="ServiceTask_FetchCreditBureau" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_LoanOrigination" name="Loan Origination &amp; Approval Process" isExecutable="true">
+
+    <bpmn:laneSet id="LaneSet_LoanOrigination">
+      <bpmn:lane id="Lane_Applicant" name="Applicant">
+        <bpmn:flowNodeRef>StartEvent_ApplicationSubmitted</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_ResubmitDocs</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ReceiveTask_ReceiveOfferAcceptance</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_ESignAgreement</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_OfferExpired</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ApplicationLapsed</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_LoanOfficer" name="Loan Officer">
+        <bpmn:flowNodeRef>UserTask_VerifyIncomeEmployment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_ManualKYCCheck</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_ManualCreditFallback</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_StructureCounterOffer</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Underwriter" name="Underwriter / Credit Committee">
+        <bpmn:flowNodeRef>UserTask_UnderwriterReview</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_RevalueCollateral</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryTimer_UnderwriterSLA</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_FraudCompliance" name="Fraud &amp; Compliance Team">
+        <bpmn:flowNodeRef>SubProcess_FraudInvestigation</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_TerminatedFraud</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Operations" name="Operations / Disbursement">
+        <bpmn:flowNodeRef>ServiceTask_VerifyAccountDisburse</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryError_DisbursementFailure</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>UserTask_ManualDisbursementRetry</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_LoanDisbursed</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_CoreBanking" name="Core Banking System">
+        <bpmn:flowNodeRef>BusinessRuleTask_CheckDocCompleteness</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_DocsComplete</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ParallelGateway_VerificationSplit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ServiceTask_PerformKYC</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ServiceTask_FetchCreditBureau</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ParallelGateway_VerificationJoin</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BusinessRuleTask_RiskScoring</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_RiskScoreOutcome</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ServiceTask_GenerateLoanOffer</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>SendTask_SendOfferToApplicant</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_RejectedRisk</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryError_CreditBureauAPI</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Start Event -->
+    <bpmn:startEvent id="StartEvent_ApplicationSubmitted" name="Loan Application &amp; Docs Submitted">
+      <bpmn:outgoing">Flow_StartToDocCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Step 1: Document Completeness (L1) -->
+    <bpmn:businessRuleTask id="BusinessRuleTask_CheckDocCompleteness" name="Check Document Completeness DMN" camunda:decisionRef="doc_check_rules">
+      <bpmn:incoming>Flow_StartToDocCheck</bpmn:incoming>
+      <bpmn:incoming>Flow_ResubmitToDocCheck</bpmn:incoming>
+      <bpmn:outgoing">Flow_DocCheckToGateway</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+
+    <bpmn:exclusiveGateway id="Gateway_DocsComplete" name="Documents Complete?">
+      <bpmn:incoming>Flow_DocCheckToGateway</bpmn:incoming>
+      <bpmn:outgoing">Flow_DocsYes</bpmn:outgoing>
+      <bpmn:outgoing">Flow_DocsNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="UserTask_ResubmitDocs" name="Resubmit Missing/Illegible Documents (L1: 7-Day Timer)">
+      <bpmn:incoming>Flow_DocsNo</bpmn:incoming>
+      <bpmn:outgoing">Flow_ResubmitToDocCheck</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_ApplicationLapsed" name="End: Application Lapsed (No Response)">
+      <bpmn:incoming>Flow_LapsedTimeout</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Step 2: Parallel Verifications -->
+    <bpmn:parallelGateway id="ParallelGateway_VerificationSplit" name="Parallel Verification Split">
+      <bpmn:incoming>Flow_DocsYes</bpmn:incoming>
+      <bpmn:outgoing">Flow_SplitToKYC</bpmn:outgoing>
+      <bpmn:outgoing">Flow_SplitToCreditBureau</bpmn:outgoing>
+      <bpmn:outgoing">Flow_SplitToIncome</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <!-- Branch 1: KYC (L2) -->
+    <bpmn:serviceTask id="ServiceTask_PerformKYC" name="Perform Automated KYC &amp; Identity Verification" camunda:type="external" camunda:topic="kyc-verification">
+      <bpmn:incoming>Flow_SplitToKYC</bpmn:incoming>
+      <bpmn:outgoing">Flow_KYCToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="UserTask_ManualKYCCheck" name="Manual Identity Verification (L2 Failure Fallback)">
+      <bpmn:outgoing">Flow_ManualKYCToJoin</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Branch 2: Credit Bureau Score (L4) -->
+    <bpmn:serviceTask id="ServiceTask_FetchCreditBureau" name="Retrieve Credit Score from Bureau API" camunda:type="external" camunda:topic="credit-bureau-api">
+      <bpmn:incoming>Flow_SplitToCreditBureau</bpmn:incoming>
+      <bpmn:outgoing">Flow_CreditToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:boundaryEvent id="BoundaryError_CreditBureauAPI" name="Bureau Timeout / Outage (L4)" attachedToRef="ServiceTask_FetchCreditBureau">
+      <bpmn:outgoing">Flow_BureauErrorToFallback</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_CreditAPI" errorRef="Error_CreditAPI" />
+    </bpmn:boundaryEvent>
+
+    <bpmn:userTask id="UserTask_ManualCreditFallback" name="Manual Credit Assessment (L4 Fallback)">
+      <bpmn:incoming>Flow_BureauErrorToFallback</bpmn:incoming>
+      <bpmn:outgoing">Flow_ManualCreditToJoin</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Branch 3: Income / Employment Verification (L6) -->
+    <bpmn:userTask id="UserTask_VerifyIncomeEmployment" name="Verify Income &amp; Employment Details">
+      <bpmn:incoming>Flow_SplitToIncome</bpmn:incoming>
+      <bpmn:outgoing">Flow_IncomeToJoin</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Join Parallel Verifications -->
+    <bpmn:parallelGateway id="ParallelGateway_VerificationJoin" name="Parallel Verification Join">
+      <bpmn:incoming>Flow_KYCToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualKYCToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_CreditToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualCreditToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_IncomeToJoin</bpmn:incoming>
+      <bpmn:outgoing">Flow_JoinToRiskScoring</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <!-- Fraud / AML Escalation Sub-Process (L3) -->
+    <bpmn:subProcess id="SubProcess_FraudInvestigation" name="Fraud &amp; AML Investigation Sub-process (L3)">
+      <bpmn:outgoing">Flow_FraudConfirmedToTerminate</bpmn:outgoing>
+    </bpmn:subProcess>
+
+    <bpmn:endEvent id="EndEvent_TerminatedFraud" name="End: Terminated (Confirmed Fraud)">
+      <bpmn:incoming>Flow_FraudConfirmedToTerminate</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="TerminateEventDefinition_Fraud" />
+    </bpmn:endEvent>
+
+    <!-- Step 3: Eligibility & Risk Scoring (L5, L6, L7, L8) -->
+    <bpmn:businessRuleTask id="BusinessRuleTask_RiskScoring" name="Eligibility &amp; Risk Scoring DMN" camunda:decisionRef="risk_scoring_rules">
+      <bpmn:incoming>Flow_JoinToRiskScoring</bpmn:incoming>
+      <bpmn:incoming>Flow_CounterOfferReScore</bpmn:incoming>
+      <bpmn:outgoing">Flow_RiskToGateway</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+
+    <bpmn:exclusiveGateway id="Gateway_RiskScoreOutcome" name="Risk Score Outcome?">
+      <bpmn:incoming>Flow_RiskToGateway</bpmn:incoming>
+      <bpmn:outgoing">Flow_AutoApprove</bpmn:outgoing>
+      <bpmn:outgoing">Flow_ManualUnderwriting</bpmn:outgoing>
+      <bpmn:outgoing">Flow_CounterOffer</bpmn:outgoing>
+      <bpmn:outgoing">Flow_RejectRisk</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Failure Path L5 & L6: Counter-Offer / Reject -->
+    <bpmn:userTask id="UserTask_StructureCounterOffer" name="Structure Counter-Offer (Guarantor / Lower Amount) (L5/L6)">
+      <bpmn:incoming>Flow_CounterOffer</bpmn:incoming>
+      <bpmn:outgoing">Flow_CounterOfferReScore</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_RejectedRisk" name="End: Loan Application Rejected (Risk Score)">
+      <bpmn:incoming>Flow_RejectRisk</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Failure Path L7 & L8: High-Value Underwriter / Collateral Valuation -->
+    <bpmn:userTask id="UserTask_UnderwriterReview" name="Underwriter / Credit Committee Manual Review (L7)">
+      <bpmn:incoming>Flow_ManualUnderwriting</bpmn:incoming>
+      <bpmn:outgoing">Flow_UnderwriterApproved</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="BoundaryTimer_UnderwriterSLA" name="SLA SLA Timer (48 Hours)" cancelActivity="false" attachedToRef="UserTask_UnderwriterReview">
+      <bpmn:timerEventDefinition id="TimerEventDefinition_48H">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT48H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:userTask id="UserTask_RevalueCollateral" name="Re-value Collateral &amp; Adjust LTV Ratio (L8)">
+      <bpmn:outgoing">Flow_RevalueToUnderwriter</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Step 4: Loan Offer Generation & Acceptance (L9, L11) -->
+    <bpmn:serviceTask id="ServiceTask_GenerateLoanOffer" name="Generate Loan Offer Document" camunda:type="external" camunda:topic="generate-offer">
+      <bpmn:incoming>Flow_AutoApprove</bpmn:incoming>
+      <bpmn:incoming>Flow_UnderwriterApproved</bpmn:incoming>
+      <bpmn:outgoing">Flow_GenerateToSend</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:sendTask id="SendTask_SendOfferToApplicant" name="Send Loan Offer Document to Applicant" camunda:type="external" camunda:topic="send-offer">
+      <bpmn:incoming>Flow_GenerateToSend</bpmn:incoming>
+      <bpmn:outgoing">Flow_SendToReceive</bpmn:outgoing>
+    </bpmn:sendTask>
+
+    <bpmn:receiveTask id="ReceiveTask_ReceiveOfferAcceptance" name="Receive Offer Acceptance (L9)" messageRef="Message_OfferAcceptance">
+      <bpmn:incoming>Flow_SendToReceive</bpmn:incoming>
+      <bpmn:outgoing">Flow_ReceiveToSign</bpmn:outgoing>
+    </bpmn:receiveTask>
+
+    <bpmn:boundaryEvent id="BoundaryTimer_OfferValidity" name="Offer Validity SLA (15 Days)" attachedToRef="ReceiveTask_ReceiveOfferAcceptance">
+      <bpmn:outgoing">Flow_OfferExpired</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerEventDefinition_15Days">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P15D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:endEvent id="EndEvent_OfferExpired" name="End: Offer Expired (15 Days Lapsed)">
+      <bpmn:incoming>Flow_OfferExpired</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:userTask id="UserTask_ESignAgreement" name="E-Sign Loan Agreement (L11)">
+      <bpmn:incoming>Flow_ReceiveToSign</bpmn:incoming>
+      <bpmn:outgoing">Flow_SignedToDisburse</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Step 5: Account Verification, Disbursement & Notification (L12) -->
+    <bpmn:serviceTask id="ServiceTask_VerifyAccountDisburse" name="Verify Account &amp; Disburse Funds" camunda:type="external" camunda:topic="disburse-funds">
+      <bpmn:incoming>Flow_SignedToDisburse</bpmn:incoming>
+      <bpmn:incoming>Flow_DisbursementRetried</bpmn:incoming>
+      <bpmn:outgoing">Flow_DisburseToComplete</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:boundaryEvent id="BoundaryError_DisbursementFailure" name="Gateway Error / Invalid Account (L12)" attachedToRef="ServiceTask_VerifyAccountDisburse">
+      <bpmn:outgoing">Flow_DisbursementFailed</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_Disburse" errorRef="Error_Disbursement" />
+    </bpmn:boundaryEvent>
+
+    <bpmn:userTask id="UserTask_ManualDisbursementRetry" name="Verify Bank Details &amp; Retry Disbursement (L12 Fallback)">
+      <bpmn:incoming>Flow_DisbursementFailed</bpmn:incoming>
+      <bpmn:outgoing">Flow_DisbursementRetried</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_LoanDisbursed" name="End: Loan Successfully Disbursed &amp; Account Created">
+      <bpmn:incoming>Flow_DisburseToComplete</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="Flow_StartToDocCheck" sourceRef="StartEvent_ApplicationSubmitted" targetRef="BusinessRuleTask_CheckDocCompleteness" />
+    <bpmn:sequenceFlow id="Flow_ResubmitToDocCheck" sourceRef="UserTask_ResubmitDocs" targetRef="BusinessRuleTask_CheckDocCompleteness" />
+    <bpmn:sequenceFlow id="Flow_DocCheckToGateway" sourceRef="BusinessRuleTask_CheckDocCompleteness" targetRef="Gateway_DocsComplete" />
+    <bpmn:sequenceFlow id="Flow_DocsYes" name="Yes" sourceRef="Gateway_DocsComplete" targetRef="ParallelGateway_VerificationSplit" />
+    <bpmn:sequenceFlow id="Flow_DocsNo" name="No (Incomplete)" sourceRef="Gateway_DocsComplete" targetRef="UserTask_ResubmitDocs" />
+    <bpmn:sequenceFlow id="Flow_LapsedTimeout" sourceRef="UserTask_ResubmitDocs" targetRef="EndEvent_ApplicationLapsed" />
+    
+    <bpmn:sequenceFlow id="Flow_SplitToKYC" sourceRef="ParallelGateway_VerificationSplit" targetRef="ServiceTask_PerformKYC" />
+    <bpmn:sequenceFlow id="Flow_SplitToCreditBureau" sourceRef="ParallelGateway_VerificationSplit" targetRef="ServiceTask_FetchCreditBureau" />
+    <bpmn:sequenceFlow id="Flow_SplitToIncome" sourceRef="ParallelGateway_VerificationSplit" targetRef="UserTask_VerifyIncomeEmployment" />
+
+    <bpmn:sequenceFlow id="Flow_KYCToJoin" sourceRef="ServiceTask_PerformKYC" targetRef="ParallelGateway_VerificationJoin" />
+    <bpmn:sequenceFlow id="Flow_ManualKYCToJoin" sourceRef="UserTask_ManualKYCCheck" targetRef="ParallelGateway_VerificationJoin" />
+    <bpmn:sequenceFlow id="Flow_CreditToJoin" sourceRef="ServiceTask_FetchCreditBureau" targetRef="ParallelGateway_VerificationJoin" />
+    <bpmn:sequenceFlow id="Flow_BureauErrorToFallback" sourceRef="BoundaryError_CreditBureauAPI" targetRef="UserTask_ManualCreditFallback" />
+    <bpmn:sequenceFlow id="Flow_ManualCreditToJoin" sourceRef="UserTask_ManualCreditFallback" targetRef="ParallelGateway_VerificationJoin" />
+    <bpmn:sequenceFlow id="Flow_IncomeToJoin" sourceRef="UserTask_VerifyIncomeEmployment" targetRef="ParallelGateway_VerificationJoin" />
+
+    <bpmn:sequenceFlow id="Flow_JoinToRiskScoring" sourceRef="ParallelGateway_VerificationJoin" targetRef="BusinessRuleTask_RiskScoring" />
+    <bpmn:sequenceFlow id="Flow_CounterOfferReScore" sourceRef="UserTask_StructureCounterOffer" targetRef="BusinessRuleTask_RiskScoring" />
+    <bpmn:sequenceFlow id="Flow_RiskToGateway" sourceRef="BusinessRuleTask_RiskScoring" targetRef="Gateway_RiskScoreOutcome" />
+    
+    <bpmn:sequenceFlow id="Flow_AutoApprove" name="Auto-Approve" sourceRef="Gateway_RiskScoreOutcome" targetRef="ServiceTask_GenerateLoanOffer" />
+    <bpmn:sequenceFlow id="Flow_ManualUnderwriting" name="Manual Review" sourceRef="Gateway_RiskScoreOutcome" targetRef="UserTask_UnderwriterReview" />
+    <bpmn:sequenceFlow id="Flow_CounterOffer" name="Counter-Offer" sourceRef="Gateway_RiskScoreOutcome" targetRef="UserTask_StructureCounterOffer" />
+    <bpmn:sequenceFlow id="Flow_RejectRisk" name="Reject" sourceRef="Gateway_RiskScoreOutcome" targetRef="EndEvent_RejectedRisk" />
+
+    <bpmn:sequenceFlow id="Flow_UnderwriterApproved" sourceRef="UserTask_UnderwriterReview" targetRef="ServiceTask_GenerateLoanOffer" />
+    <bpmn:sequenceFlow id="Flow_RevalueToUnderwriter" sourceRef="UserTask_RevalueCollateral" targetRef="UserTask_UnderwriterReview" />
+
+    <bpmn:sequenceFlow id="Flow_GenerateToSend" sourceRef="ServiceTask_GenerateLoanOffer" targetRef="SendTask_SendOfferToApplicant" />
+    <bpmn:sequenceFlow id="Flow_SendToReceive" sourceRef="SendTask_SendOfferToApplicant" targetRef="ReceiveTask_ReceiveOfferAcceptance" />
+    <bpmn:sequenceFlow id="Flow_ReceiveToSign" sourceRef="ReceiveTask_ReceiveOfferAcceptance" targetRef="UserTask_ESignAgreement" />
+    <bpmn:sequenceFlow id="Flow_OfferExpired" sourceRef="BoundaryTimer_OfferValidity" targetRef="EndEvent_OfferExpired" />
+
+    <bpmn:sequenceFlow id="Flow_SignedToDisburse" sourceRef="UserTask_ESignAgreement" targetRef="ServiceTask_VerifyAccountDisburse" />
+    <bpmn:sequenceFlow id="Flow_DisbursementFailed" sourceRef="BoundaryError_DisbursementFailure" targetRef="UserTask_ManualDisbursementRetry" />
+    <bpmn:sequenceFlow id="Flow_DisbursementRetried" sourceRef="UserTask_ManualDisbursementRetry" targetRef="ServiceTask_VerifyAccountDisburse" />
+    <bpmn:sequenceFlow id="Flow_DisburseToComplete" sourceRef="ServiceTask_VerifyAccountDisburse" targetRef="EndEvent_LoanDisbursed" />
+    <bpmn:sequenceFlow id="Flow_FraudConfirmedToTerminate" sourceRef="SubProcess_FraudInvestigation" targetRef="EndEvent_TerminatedFraud" />
+
+  </bpmn:process>
+
+  <bpmn:message id="Message_OfferAcceptance" name="MSG_OFFER_ACCEPTANCE" />
+  <bpmn:error id="Error_CreditAPI" name="ERR_CREDIT_BUREAU_TIMEOUT" errorCode="ERR_CREDIT_BUREAU_TIMEOUT" />
+  <bpmn:error id="Error_Disbursement" name="ERR_DISBURSEMENT_FAILED" errorCode="ERR_DISBURSEMENT_FAILED" />
+
+  <!-- Diagram Interchange Coordinates -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_LoanOrigination">
+    <bpmndi:BPMNPlane id="BPMNPlane_LoanOrigination" bpmnElement="Collaboration_LoanOrigination">
+      <bpmndi:BPMNShape id="Participant_BankSystem_di" bpmnElement="Participant_BankSystem" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1700" height="1150" />
+      </bpmndi:BPMNShape>
+
+      <!-- Lanes -->
+      <bpmndi:BPMNShape id="Lane_Applicant_di" bpmnElement="Lane_Applicant" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1670" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_LoanOfficer_di" bpmnElement="Lane_LoanOfficer" isHorizontal="true">
+        <dc:Bounds x="190" y="280" width="1670" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Underwriter_di" bpmnElement="Lane_Underwriter" isHorizontal="true">
+        <dc:Bounds x="190" y="470" width="1670" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_FraudCompliance_di" bpmnElement="Lane_FraudCompliance" isHorizontal="true">
+        <dc:Bounds x="190" y="660" width="1670" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Operations_di" bpmnElement="Lane_Operations" isHorizontal="true">
+        <dc:Bounds x="190" y="840" width="1670" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_CoreBanking_di" bpmnElement="Lane_CoreBanking" isHorizontal="true">
+        <dc:Bounds x="190" y="1030" width="1670" height="200" />
+      </bpmndi:BPMNShape>
+
+      <!-- External Pool -->
+      <bpmndi:BPMNShape id="Participant_CreditBureau_di" bpmnElement="Participant_CreditBureau" isHorizontal="true">
+        <dc:Bounds x="160" y="1270" width="1700" height="120" />
+      </bpmndi:BPMNShape>
+
+      <!-- Shapes -->
+      <bpmndi:BPMNShape id="StartEvent_ApplicationSubmitted_di" bpmnElement="StartEvent_ApplicationSubmitted">
+        <dc:Bounds x="242" y="152" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BusinessRuleTask_CheckDocCompleteness_di" bpmnElement="BusinessRuleTask_CheckDocCompleteness">
+        <dc:Bounds x="230" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_DocsComplete_di" bpmnElement="Gateway_DocsComplete" isMarkerVisible="true">
+        <dc:Bounds x="385" y="1095" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_ResubmitDocs_di" bpmnElement="UserTask_ResubmitDocs">
+        <dc:Bounds x="360" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ApplicationLapsed_di" bpmnElement="EndEvent_ApplicationLapsed">
+        <dc:Bounds x="512" y="152" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ParallelGateway_VerificationSplit_di" bpmnElement="ParallelGateway_VerificationSplit">
+        <dc:Bounds x="495" y="1095" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ServiceTask_PerformKYC_di" bpmnElement="ServiceTask_PerformKYC">
+        <dc:Bounds x="590" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ServiceTask_FetchCreditBureau_di" bpmnElement="ServiceTask_FetchCreditBureau">
+        <dc:Bounds x="720" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_VerifyIncomeEmployment_di" bpmnElement="UserTask_VerifyIncomeEmployment">
+        <dc:Bounds x="650" y="330" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ParallelGateway_VerificationJoin_di" bpmnElement="ParallelGateway_VerificationJoin">
+        <dc:Bounds x="875" y="1095" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BusinessRuleTask_RiskScoring_di" bpmnElement="BusinessRuleTask_RiskScoring">
+        <dc:Bounds x="970" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_RiskScoreOutcome_di" bpmnElement="Gateway_RiskScoreOutcome" isMarkerVisible="true">
+        <dc:Bounds x="1125" y="1095" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_UnderwriterReview_di" bpmnElement="UserTask_UnderwriterReview">
+        <dc:Bounds x="1100" y="520" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ServiceTask_GenerateLoanOffer_di" bpmnElement="ServiceTask_GenerateLoanOffer">
+        <dc:Bounds x="1240" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SendTask_SendOfferToApplicant_di" bpmnElement="SendTask_SendOfferToApplicant">
+        <dc:Bounds x="1380" y="1080" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ReceiveTask_ReceiveOfferAcceptance_di" bpmnElement="ReceiveTask_ReceiveOfferAcceptance">
+        <dc:Bounds x="1380" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_ESignAgreement_di" bpmnElement="UserTask_ESignAgreement">
+        <dc:Bounds x="1540" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ServiceTask_VerifyAccountDisburse_di" bpmnElement="ServiceTask_VerifyAccountDisburse">
+        <dc:Bounds x="1540" y="895" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_LoanDisbursed_di" bpmnElement="EndEvent_LoanDisbursed">
+        <dc:Bounds x="1712" y="917" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <!-- Message Flows -->
+      <bpmndi:BPMNEdge id="MessageFlow_CreditBureauCall_di" bpmnElement="MessageFlow_CreditBureauCall">
+        <di:waypoint x="770" y="1160" />
+        <di:waypoint x="770" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="MessageFlow_CreditBureauResponse_di" bpmnElement="MessageFlow_CreditBureauResponse">
+        <di:waypoint x="800" y="1270" />
+        <di:waypoint x="800" y="1160" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn:definitions>
