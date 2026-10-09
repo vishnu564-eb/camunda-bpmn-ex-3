@@ -72,13 +72,3 @@ A bank processes personal and secured loan applications through document checks,
 
 ---
 
-## How to Import & Open in Camunda
-
-1. **Camunda Modeler (Desktop)**:
-   - Open **Camunda Modeler**.
-   - Click `File -> Open File...` and select either `student_project_approval.bpmn` or `loan_origination_approval.bpmn`.
-   - The visual layout, pools, lanes, gateways, and failure events will render automatically.
-
-2. **Camunda 7 / Camunda 8 Engine**:
-   - Both `.bpmn` files contain executable process IDs (`Process_StudentProjectApproval` and `Process_LoanOrigination`).
-   - Deploy directly via Camunda Modeler, REST API, or Zeebe / Camunda 8 Operates.
