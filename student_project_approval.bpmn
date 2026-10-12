@@ -3,12 +3,15 @@
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                   id="Definitions_StudentProjectApproval"
                   targetNamespace="http://bpmn.io/schema/bpmn"
                   exporter="Camunda Modeler"
-                  exporterVersion="5.20.0">
+                  exporterVersion="5.50.1"
+                  modeler:executionPlatform="Camunda Cloud"
+                  modeler:executionPlatformVersion="8.9.0">
 
   <bpmn:collaboration id="Collaboration_StudentProject">
     <bpmn:participant id="Participant_StudentProjectProcess" name="Student Project Approval &amp; Allocation System" processRef="Process_StudentProjectApproval" />
@@ -72,7 +75,10 @@
     </bpmn:startEvent>
 
     <!-- Step 1 & 2: Form & Team Rule Validation -->
-    <bpmn:serviceTask id="ServiceTask_ValidateFormAndRules" name="Validate Form Completeness &amp; Team Rules" camunda:type="external" camunda:topic="validate-proposal">
+    <bpmn:serviceTask id="ServiceTask_ValidateFormAndRules" name="Validate Form Completeness &amp; Team Rules">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="validate-proposal" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_StartToValidate</bpmn:incoming>
       <bpmn:incoming>Flow_ResubmitToValidate</bpmn:incoming>
       <bpmn:outgoing">Flow_ValidateToGateway</bpmn:outgoing>
@@ -102,7 +108,10 @@
     </bpmn:endEvent>
 
     <!-- Step 3 & 4: Duplicate & Similarity Check -->
-    <bpmn:serviceTask id="ServiceTask_CheckDuplicateTopic" name="Run Similarity &amp; Duplicate Topic Check" camunda:type="external" camunda:topic="check-similarity">
+    <bpmn:serviceTask id="ServiceTask_CheckDuplicateTopic" name="Run Similarity &amp; Duplicate Topic Check">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="check-similarity" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_ValidationYes</bpmn:incoming>
       <bpmn:outgoing">Flow_CheckToGateway</bpmn:outgoing>
     </bpmn:serviceTask>
@@ -154,7 +163,10 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <bpmn:sendTask id="SendTask_SendReviewReminder" name="Send Reminder to Review Committee" camunda:type="external" camunda:topic="send-reminder">
+    <bpmn:sendTask id="SendTask_SendReviewReminder" name="Send Reminder to Review Committee">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-reminder" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_SLAToReminder</bpmn:incoming>
     </bpmn:sendTask>
 
@@ -185,7 +197,10 @@
     </bpmn:endEvent>
 
     <!-- Step 8: Guide Availability & Workload Check -->
-    <bpmn:businessRuleTask id="BusinessRuleTask_CheckGuideAvailability" name="Check Guide Availability &amp; Workload DMN" camunda:decisionRef="guide_allocation_rules">
+    <bpmn:businessRuleTask id="BusinessRuleTask_CheckGuideAvailability" name="Check Guide Availability &amp; Workload DMN">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="guide_allocation_rules" resultVariable="guideAvailable" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_Approved</bpmn:incoming>
       <bpmn:incoming>Flow_RevisionCompleted</bpmn:incoming>
       <bpmn:outgoing">Flow_RuleToGateway</bpmn:outgoing>
@@ -204,13 +219,19 @@
     </bpmn:userTask>
 
     <!-- Step 9: Allocate & Request Guide Acceptance -->
-    <bpmn:serviceTask id="ServiceTask_AllocateGuide" name="Allocate Faculty Guide" camunda:type="external" camunda:topic="allocate-guide">
+    <bpmn:serviceTask id="ServiceTask_AllocateGuide" name="Allocate Faculty Guide">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="allocate-guide" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_GuideFound</bpmn:incoming>
       <bpmn:incoming>Flow_ManualGuideAssigned</bpmn:incoming>
       <bpmn:outgoing">Flow_AllocateToRequest</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:sendTask id="SendTask_SendAllocationRequest" name="Send Guide Allocation Request" camunda:type="external" camunda:topic="send-allocation-request">
+    <bpmn:sendTask id="SendTask_SendAllocationRequest" name="Send Guide Allocation Request">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-allocation-request" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_AllocateToRequest</bpmn:incoming>
       <bpmn:outgoing">Flow_RequestToReceive</bpmn:outgoing>
     </bpmn:sendTask>
@@ -246,7 +267,10 @@
     </bpmn:userTask>
 
     <!-- Step 11: Notify Student & Complete -->
-    <bpmn:sendTask id="SendTask_NotifyStudentAndRecord" name="Notify Student &amp; Record Allocation" camunda:type="external" camunda:topic="notify-student">
+    <bpmn:sendTask id="SendTask_NotifyStudentAndRecord" name="Notify Student &amp; Record Allocation">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notify-student" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_FinalizationToNotify</bpmn:incoming>
       <bpmn:outgoing">Flow_NotifyToDone</bpmn:outgoing>
     </bpmn:sendTask>
@@ -342,9 +366,9 @@
       <bpmndi:BPMNShape id="UserTask_ResubmitProposal_di" bpmnElement="UserTask_ResubmitProposal">
         <dc:Bounds x="360" y="130" width="100" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_InvalidTeam_di" bpmnElement="EndEvent_InvalidTeam">
+      <bpmndi:EndEvent id="EndEvent_InvalidTeam_di" bpmnElement="EndEvent_InvalidTeam">
         <dc:Bounds x="512" y="152" width="36" height="36" />
-      </bpmndi:BPMNShape>
+      </bpmndi:EndEvent>
       <bpmndi:BPMNShape id="ServiceTask_CheckDuplicateTopic_di" bpmnElement="ServiceTask_CheckDuplicateTopic">
         <dc:Bounds x="490" y="910" width="100" height="80" />
       </bpmndi:BPMNShape>

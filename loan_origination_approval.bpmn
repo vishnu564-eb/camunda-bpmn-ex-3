@@ -3,12 +3,15 @@
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                   id="Definitions_LoanOrigination"
                   targetNamespace="http://bpmn.io/schema/bpmn"
                   exporter="Camunda Modeler"
-                  exporterVersion="5.20.0">
+                  exporterVersion="5.50.1"
+                  modeler:executionPlatform="Camunda Cloud"
+                  modeler:executionPlatformVersion="8.9.0">
 
   <bpmn:collaboration id="Collaboration_LoanOrigination">
     <bpmn:participant id="Participant_BankSystem" name="Loan Origination &amp; Approval System" processRef="Process_LoanOrigination" />
@@ -76,7 +79,10 @@
     </bpmn:startEvent>
 
     <!-- Step 1: Document Completeness (L1) -->
-    <bpmn:businessRuleTask id="BusinessRuleTask_CheckDocCompleteness" name="Check Document Completeness DMN" camunda:decisionRef="doc_check_rules">
+    <bpmn:businessRuleTask id="BusinessRuleTask_CheckDocCompleteness" name="Check Document Completeness DMN">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="doc_check_rules" resultVariable="docsComplete" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_StartToDocCheck</bpmn:incoming>
       <bpmn:incoming>Flow_ResubmitToDocCheck</bpmn:incoming>
       <bpmn:outgoing">Flow_DocCheckToGateway</bpmn:outgoing>
@@ -106,7 +112,10 @@
     </bpmn:parallelGateway>
 
     <!-- Branch 1: KYC (L2) -->
-    <bpmn:serviceTask id="ServiceTask_PerformKYC" name="Perform Automated KYC &amp; Identity Verification" camunda:type="external" camunda:topic="kyc-verification">
+    <bpmn:serviceTask id="ServiceTask_PerformKYC" name="Perform Automated KYC &amp; Identity Verification">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="kyc-verification" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_SplitToKYC</bpmn:incoming>
       <bpmn:outgoing">Flow_KYCToJoin</bpmn:outgoing>
     </bpmn:serviceTask>
@@ -116,7 +125,10 @@
     </bpmn:userTask>
 
     <!-- Branch 2: Credit Bureau Score (L4) -->
-    <bpmn:serviceTask id="ServiceTask_FetchCreditBureau" name="Retrieve Credit Score from Bureau API" camunda:type="external" camunda:topic="credit-bureau-api">
+    <bpmn:serviceTask id="ServiceTask_FetchCreditBureau" name="Retrieve Credit Score from Bureau API">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="credit-bureau-api" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_SplitToCreditBureau</bpmn:incoming>
       <bpmn:outgoing">Flow_CreditToJoin</bpmn:outgoing>
     </bpmn:serviceTask>
@@ -158,7 +170,10 @@
     </bpmn:endEvent>
 
     <!-- Step 3: Eligibility & Risk Scoring (L5, L6, L7, L8) -->
-    <bpmn:businessRuleTask id="BusinessRuleTask_RiskScoring" name="Eligibility &amp; Risk Scoring DMN" camunda:decisionRef="risk_scoring_rules">
+    <bpmn:businessRuleTask id="BusinessRuleTask_RiskScoring" name="Eligibility &amp; Risk Scoring DMN">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="risk_scoring_rules" resultVariable="riskDecision" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_JoinToRiskScoring</bpmn:incoming>
       <bpmn:incoming>Flow_CounterOfferReScore</bpmn:incoming>
       <bpmn:outgoing">Flow_RiskToGateway</bpmn:outgoing>
@@ -199,13 +214,19 @@
     </bpmn:userTask>
 
     <!-- Step 4: Loan Offer Generation & Acceptance (L9, L11) -->
-    <bpmn:serviceTask id="ServiceTask_GenerateLoanOffer" name="Generate Loan Offer Document" camunda:type="external" camunda:topic="generate-offer">
+    <bpmn:serviceTask id="ServiceTask_GenerateLoanOffer" name="Generate Loan Offer Document">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="generate-offer" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_AutoApprove</bpmn:incoming>
       <bpmn:incoming>Flow_UnderwriterApproved</bpmn:incoming>
       <bpmn:outgoing">Flow_GenerateToSend</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:sendTask id="SendTask_SendOfferToApplicant" name="Send Loan Offer Document to Applicant" camunda:type="external" camunda:topic="send-offer">
+    <bpmn:sendTask id="SendTask_SendOfferToApplicant" name="Send Loan Offer Document to Applicant">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-offer" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_GenerateToSend</bpmn:incoming>
       <bpmn:outgoing">Flow_SendToReceive</bpmn:outgoing>
     </bpmn:sendTask>
@@ -232,7 +253,10 @@
     </bpmn:userTask>
 
     <!-- Step 5: Account Verification, Disbursement & Notification (L12) -->
-    <bpmn:serviceTask id="ServiceTask_VerifyAccountDisburse" name="Verify Account &amp; Disburse Funds" camunda:type="external" camunda:topic="disburse-funds">
+    <bpmn:serviceTask id="ServiceTask_VerifyAccountDisburse" name="Verify Account &amp; Disburse Funds">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="disburse-funds" retries="3" />
+      </bpmn:extensionElements>
       <bpmn:incoming>Flow_SignedToDisburse</bpmn:incoming>
       <bpmn:incoming>Flow_DisbursementRetried</bpmn:incoming>
       <bpmn:outgoing">Flow_DisburseToComplete</bpmn:outgoing>
@@ -296,7 +320,11 @@
 
   </bpmn:process>
 
-  <bpmn:message id="Message_OfferAcceptance" name="MSG_OFFER_ACCEPTANCE" />
+  <bpmn:message id="Message_OfferAcceptance" name="MSG_OFFER_ACCEPTANCE">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=correlationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
   <bpmn:error id="Error_CreditAPI" name="ERR_CREDIT_BUREAU_TIMEOUT" errorCode="ERR_CREDIT_BUREAU_TIMEOUT" />
   <bpmn:error id="Error_Disbursement" name="ERR_DISBURSEMENT_FAILED" errorCode="ERR_DISBURSEMENT_FAILED" />
 
@@ -400,7 +428,7 @@
         <di:waypoint x="800" y="1270" />
         <di:waypoint x="800" y="1160" />
       </bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
+    </bpmn:plane>
   </bpmndi:BPMNDiagram>
 
 </bpmn:definitions>
