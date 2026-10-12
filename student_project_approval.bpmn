@@ -81,25 +81,25 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_StartToValidate</bpmn:incoming>
       <bpmn:incoming>Flow_ResubmitToValidate</bpmn:incoming>
-      <bpmn:outgoing">Flow_ValidateToGateway</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ValidateToGateway</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:exclusiveGateway id="Gateway_ValidationPassed" name="Validation Passed?">
       <bpmn:incoming>Flow_ValidateToGateway</bpmn:incoming>
-      <bpmn:outgoing">Flow_ValidationYes</bpmn:outgoing>
-      <bpmn:outgoing">Flow_ValidationNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ValidationYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ValidationNo</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <!-- Failure Path F1 & F2: Validation & Team Rule Check -->
     <bpmn:exclusiveGateway id="Gateway_ValidationAttempts" name="Attempt Limit Reached? (&gt;2)">
       <bpmn:incoming>Flow_ValidationNo</bpmn:incoming>
-      <bpmn:outgoing">Flow_AttemptUnderLimit</bpmn:outgoing>
-      <bpmn:outgoing">Flow_AttemptExceeded</bpmn:outgoing>
+      <bpmn:outgoing>Flow_AttemptUnderLimit</bpmn:outgoing>
+      <bpmn:outgoing>Flow_AttemptExceeded</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <bpmn:userTask id="UserTask_ResubmitProposal" name="Resubmit Proposal Form (F1: Correction)">
       <bpmn:incoming>Flow_AttemptUnderLimit</bpmn:incoming>
-      <bpmn:outgoing">Flow_ResubmitToValidate</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ResubmitToValidate</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:endEvent id="EndEvent_InvalidTeam" name="End: Proposal Rejected (F2: Invalid Team / Exceeded Attempts)">
@@ -113,24 +113,24 @@
         <zeebe:taskDefinition type="check-similarity" retries="3" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ValidationYes</bpmn:incoming>
-      <bpmn:outgoing">Flow_CheckToGateway</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CheckToGateway</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:exclusiveGateway id="Gateway_DuplicateCheck" name="Similarity Above Threshold?">
       <bpmn:incoming>Flow_CheckToGateway</bpmn:incoming>
-      <bpmn:outgoing">Flow_PlagiarismNo</bpmn:outgoing>
-      <bpmn:outgoing">Flow_PlagiarismYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_PlagiarismNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_PlagiarismYes</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <!-- Failure Path F3: Duplicate / Plagiarised Topic -->
     <bpmn:userTask id="UserTask_ReviewPlagiarismMatch" name="Review Plagiarism Match (F3)">
       <bpmn:incoming>Flow_PlagiarismYes</bpmn:incoming>
-      <bpmn:outgoing">Flow_MatchToDecision</bpmn:outgoing>
+      <bpmn:outgoing>Flow_MatchToDecision</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:userTask id="UserTask_ModifyTopic" name="Modify Topic &amp; Proposal">
       <bpmn:incoming>Flow_MatchToDecision</bpmn:incoming>
-      <bpmn:outgoing">Flow_ResubmitToValidate</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ResubmitToValidate</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:endEvent id="EndEvent_RejectedPlagiarism" name="End: Rejected (Plagiarism)">
@@ -140,24 +140,24 @@
     <!-- Step 5: Coordinator Screening -->
     <bpmn:userTask id="UserTask_ScreenProposal" name="Screen Proposal &amp; Check Deadlines">
       <bpmn:incoming>Flow_PlagiarismNo</bpmn:incoming>
-      <bpmn:outgoing">Flow_ScreenToCommittee</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ScreenToCommittee</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Failure Path F4: Submission Deadline Timer -->
     <bpmn:userTask id="UserTask_HandleSubmissionDeadline" name="Review Late Submission Request (F4)">
-      <bpmn:outgoing">Flow_LateRequestApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_LateRequestApproved</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Step 6: Committee Evaluation -->
     <bpmn:userTask id="UserTask_EvaluateProposal" name="Evaluate Proposal (Review Committee)">
       <bpmn:incoming>Flow_ScreenToCommittee</bpmn:incoming>
       <bpmn:incoming>Flow_LateRequestApproved</bpmn:incoming>
-      <bpmn:outgoing">Flow_EvaluateToGateway</bpmn:outgoing>
+      <bpmn:outgoing>Flow_EvaluateToGateway</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Failure Path F7: Non-interrupting Timer SLA Boundary Events -->
     <bpmn:boundaryEvent id="BoundaryTimer_ReviewSLA" name="SLA Timer (3 Days)" cancelActivity="false" attachedToRef="UserTask_EvaluateProposal">
-      <bpmn:outgoing">Flow_SLAToReminder</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SLAToReminder</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerEventDefinition_3Days">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P3D</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
@@ -171,7 +171,7 @@
     </bpmn:sendTask>
 
     <bpmn:boundaryEvent id="BoundaryTimer_ReviewEscalation" name="Escalation Timer (7 Days)" cancelActivity="false" attachedToRef="UserTask_EvaluateProposal">
-      <bpmn:outgoing">Flow_TimerToEscalation</bpmn:outgoing>
+      <bpmn:outgoing>Flow_TimerToEscalation</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerEventDefinition_7Days">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P7D</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
@@ -180,15 +180,15 @@
     <!-- Step 7: Gateway Committee Decision -->
     <bpmn:exclusiveGateway id="Gateway_CommitteeDecision" name="Committee Decision?">
       <bpmn:incoming>Flow_EvaluateToGateway</bpmn:incoming>
-      <bpmn:outgoing">Flow_Approved</bpmn:outgoing>
-      <bpmn:outgoing">Flow_Revise</bpmn:outgoing>
-      <bpmn:outgoing">Flow_RejectCommittee</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Revise</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RejectCommittee</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <!-- Failure Path F5: Revision Loop Sub-process -->
     <bpmn:subProcess id="SubProcess_RevisionLoop" name="7-Day Revision Loop (F5: Max 2 Cycles)">
       <bpmn:incoming>Flow_Revise</bpmn:incoming>
-      <bpmn:outgoing">Flow_RevisionCompleted</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RevisionCompleted</bpmn:outgoing>
     </bpmn:subProcess>
 
     <!-- Failure Path F6: Committee Rejection -->
@@ -203,19 +203,19 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Approved</bpmn:incoming>
       <bpmn:incoming>Flow_RevisionCompleted</bpmn:incoming>
-      <bpmn:outgoing">Flow_RuleToGateway</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RuleToGateway</bpmn:outgoing>
     </bpmn:businessRuleTask>
 
     <!-- Failure Path F8: No Guide Available -->
     <bpmn:exclusiveGateway id="Gateway_GuideAvailable" name="Guide Available?">
       <bpmn:incoming>Flow_RuleToGateway</bpmn:incoming>
-      <bpmn:outgoing">Flow_GuideFound</bpmn:outgoing>
-      <bpmn:outgoing">Flow_GuideNone</bpmn:outgoing>
+      <bpmn:outgoing>Flow_GuideFound</bpmn:outgoing>
+      <bpmn:outgoing>Flow_GuideNone</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <bpmn:userTask id="UserTask_ManualGuideAllocation" name="Manual Guide / Co-Guide Allocation (F8)">
       <bpmn:incoming>Flow_GuideNone</bpmn:incoming>
-      <bpmn:outgoing">Flow_ManualGuideAssigned</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManualGuideAssigned</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Step 9: Allocate & Request Guide Acceptance -->
@@ -225,7 +225,7 @@
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_GuideFound</bpmn:incoming>
       <bpmn:incoming>Flow_ManualGuideAssigned</bpmn:incoming>
-      <bpmn:outgoing">Flow_AllocateToRequest</bpmn:outgoing>
+      <bpmn:outgoing>Flow_AllocateToRequest</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:sendTask id="SendTask_SendAllocationRequest" name="Send Guide Allocation Request">
@@ -233,17 +233,17 @@
         <zeebe:taskDefinition type="send-allocation-request" retries="3" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_AllocateToRequest</bpmn:incoming>
-      <bpmn:outgoing">Flow_RequestToReceive</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RequestToReceive</bpmn:outgoing>
     </bpmn:sendTask>
 
     <!-- Step 10: Guide Acceptance / Decline (Failure Path F9) -->
     <bpmn:userTask id="UserTask_GuideResponse" name="Guide Accept / Decline Allocation Request (F9)">
       <bpmn:incoming>Flow_RequestToReceive</bpmn:incoming>
-      <bpmn:outgoing">Flow_GuideAccepted</bpmn:outgoing>
+      <bpmn:outgoing>Flow_GuideAccepted</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:boundaryEvent id="BoundaryTimer_GuideResponseTimeout" name="5-Day Response SLA" attachedToRef="UserTask_GuideResponse">
-      <bpmn:outgoing">Flow_GuideTimeout</bpmn:outgoing>
+      <bpmn:outgoing>Flow_GuideTimeout</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerEventDefinition_5Days">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P5D</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
@@ -252,18 +252,18 @@
     <!-- Sub-process & Failure Path F11: Compensation / Withdrawal -->
     <bpmn:subProcess id="SubProcess_AllocationFinalization" name="Allocation Finalization Sub-process (F11)">
       <bpmn:incoming>Flow_GuideAccepted</bpmn:incoming>
-      <bpmn:outgoing">Flow_FinalizationToNotify</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FinalizationToNotify</bpmn:outgoing>
     </bpmn:subProcess>
 
     <!-- Failure Path F10: System Failure Error Boundary Event -->
     <bpmn:boundaryEvent id="BoundaryError_SystemFailure" name="Email/DB Error (F10)" attachedToRef="SendTask_NotifyStudentAndRecord">
-      <bpmn:outgoing">Flow_SystemFailureFallback</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SystemFailureFallback</bpmn:outgoing>
       <bpmn:errorEventDefinition id="ErrorEventDefinition_SystemFailure" errorRef="Error_SystemFailure" />
     </bpmn:boundaryEvent>
 
     <bpmn:userTask id="UserTask_ManualNotificationFallback" name="Manual Notification &amp; Database Record (F10 Fallback)">
       <bpmn:incoming>Flow_SystemFailureFallback</bpmn:incoming>
-      <bpmn:outgoing">Flow_FallbackToDone</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FallbackToDone</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Step 11: Notify Student & Complete -->
@@ -272,7 +272,7 @@
         <zeebe:taskDefinition type="notify-student" retries="3" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_FinalizationToNotify</bpmn:incoming>
-      <bpmn:outgoing">Flow_NotifyToDone</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NotifyToDone</bpmn:outgoing>
     </bpmn:sendTask>
 
     <bpmn:endEvent id="EndEvent_ProjectAllocated" name="End: Project Successfully Allocated">
