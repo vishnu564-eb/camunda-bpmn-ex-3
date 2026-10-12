@@ -34,14 +34,10 @@
         <bpmn:flowNodeRef>UserTask_ScreenProposal</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>UserTask_ReviewPlagiarismMatch</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>UserTask_ManualGuideAllocation</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>UserTask_HandleSubmissionDeadline</bpmn:flowNodeRef>
       </bpmn:lane>
 
       <bpmn:lane id="Lane_Committee" name="Review Committee (incl. HoD)">
         <bpmn:flowNodeRef>UserTask_EvaluateProposal</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>BoundaryTimer_ReviewSLA</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>BoundaryTimer_ReviewEscalation</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>SendTask_SendReviewReminder</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>SubProcess_RevisionLoop</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Gateway_CommitteeDecision</bpmn:flowNodeRef>
       </bpmn:lane>
@@ -63,8 +59,6 @@
         <bpmn:flowNodeRef>SendTask_SendAllocationRequest</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>SendTask_NotifyStudentAndRecord</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>EndEvent_ProjectAllocated</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>BoundaryError_SystemFailure</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>UserTask_ManualNotificationFallback</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>SubProcess_AllocationFinalization</bpmn:flowNodeRef>
       </bpmn:lane>
     </bpmn:laneSet>
@@ -130,7 +124,7 @@
 
     <bpmn:userTask id="UserTask_ModifyTopic" name="Modify Topic &amp; Proposal">
       <bpmn:incoming>Flow_MatchToDecision</bpmn:incoming>
-      <bpmn:outgoing>Flow_ResubmitToValidate</bpmn:outgoing>
+      <bpmn:outgoing>Flow_TopicModifiedToScreen</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:endEvent id="EndEvent_RejectedPlagiarism" name="End: Rejected (Plagiarism)">
@@ -140,42 +134,15 @@
     <!-- Step 5: Coordinator Screening -->
     <bpmn:userTask id="UserTask_ScreenProposal" name="Screen Proposal &amp; Check Deadlines">
       <bpmn:incoming>Flow_PlagiarismNo</bpmn:incoming>
+      <bpmn:incoming>Flow_TopicModifiedToScreen</bpmn:incoming>
       <bpmn:outgoing>Flow_ScreenToCommittee</bpmn:outgoing>
-    </bpmn:userTask>
-
-    <!-- Failure Path F4: Submission Deadline Timer -->
-    <bpmn:userTask id="UserTask_HandleSubmissionDeadline" name="Review Late Submission Request (F4)">
-      <bpmn:outgoing>Flow_LateRequestApproved</bpmn:outgoing>
     </bpmn:userTask>
 
     <!-- Step 6: Committee Evaluation -->
     <bpmn:userTask id="UserTask_EvaluateProposal" name="Evaluate Proposal (Review Committee)">
       <bpmn:incoming>Flow_ScreenToCommittee</bpmn:incoming>
-      <bpmn:incoming>Flow_LateRequestApproved</bpmn:incoming>
       <bpmn:outgoing>Flow_EvaluateToGateway</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Failure Path F7: Non-interrupting Timer SLA Boundary Events -->
-    <bpmn:boundaryEvent id="BoundaryTimer_ReviewSLA" name="SLA Timer (3 Days)" cancelActivity="false" attachedToRef="UserTask_EvaluateProposal">
-      <bpmn:outgoing>Flow_SLAToReminder</bpmn:outgoing>
-      <bpmn:timerEventDefinition id="TimerEventDefinition_3Days">
-        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P3D</bpmn:timeDuration>
-      </bpmn:timerEventDefinition>
-    </bpmn:boundaryEvent>
-
-    <bpmn:sendTask id="SendTask_SendReviewReminder" name="Send Reminder to Review Committee">
-      <bpmn:extensionElements>
-        <zeebe:taskDefinition type="send-reminder" retries="3" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_SLAToReminder</bpmn:incoming>
-    </bpmn:sendTask>
-
-    <bpmn:boundaryEvent id="BoundaryTimer_ReviewEscalation" name="Escalation Timer (7 Days)" cancelActivity="false" attachedToRef="UserTask_EvaluateProposal">
-      <bpmn:outgoing>Flow_TimerToEscalation</bpmn:outgoing>
-      <bpmn:timerEventDefinition id="TimerEventDefinition_7Days">
-        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P7D</bpmn:timeDuration>
-      </bpmn:timerEventDefinition>
-    </bpmn:boundaryEvent>
 
     <!-- Step 7: Gateway Committee Decision -->
     <bpmn:exclusiveGateway id="Gateway_CommitteeDecision" name="Committee Decision?">
@@ -215,6 +182,7 @@
 
     <bpmn:userTask id="UserTask_ManualGuideAllocation" name="Manual Guide / Co-Guide Allocation (F8)">
       <bpmn:incoming>Flow_GuideNone</bpmn:incoming>
+      <bpmn:incoming>Flow_GuideTimeout</bpmn:incoming>
       <bpmn:outgoing>Flow_ManualGuideAssigned</bpmn:outgoing>
     </bpmn:userTask>
 
@@ -249,22 +217,11 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <!-- Sub-process & Failure Path F11: Compensation / Withdrawal -->
+    <!-- Sub-process & Failure Path F11: Allocation Finalization -->
     <bpmn:subProcess id="SubProcess_AllocationFinalization" name="Allocation Finalization Sub-process (F11)">
       <bpmn:incoming>Flow_GuideAccepted</bpmn:incoming>
       <bpmn:outgoing>Flow_FinalizationToNotify</bpmn:outgoing>
     </bpmn:subProcess>
-
-    <!-- Failure Path F10: System Failure Error Boundary Event -->
-    <bpmn:boundaryEvent id="BoundaryError_SystemFailure" name="Email/DB Error (F10)" attachedToRef="SendTask_NotifyStudentAndRecord">
-      <bpmn:outgoing>Flow_SystemFailureFallback</bpmn:outgoing>
-      <bpmn:errorEventDefinition id="ErrorEventDefinition_SystemFailure" errorRef="Error_SystemFailure" />
-    </bpmn:boundaryEvent>
-
-    <bpmn:userTask id="UserTask_ManualNotificationFallback" name="Manual Notification &amp; Database Record (F10 Fallback)">
-      <bpmn:incoming>Flow_SystemFailureFallback</bpmn:incoming>
-      <bpmn:outgoing>Flow_FallbackToDone</bpmn:outgoing>
-    </bpmn:userTask>
 
     <!-- Step 11: Notify Student & Complete -->
     <bpmn:sendTask id="SendTask_NotifyStudentAndRecord" name="Notify Student &amp; Record Allocation">
@@ -277,26 +234,23 @@
 
     <bpmn:endEvent id="EndEvent_ProjectAllocated" name="End: Project Successfully Allocated">
       <bpmn:incoming>Flow_NotifyToDone</bpmn:incoming>
-      <bpmn:incoming>Flow_FallbackToDone</bpmn:incoming>
     </bpmn:endEvent>
 
     <!-- Sequence Flows -->
     <bpmn:sequenceFlow id="Flow_StartToValidate" sourceRef="StartEvent_ProposalSubmitted" targetRef="ServiceTask_ValidateFormAndRules" />
     <bpmn:sequenceFlow id="Flow_ResubmitToValidate" sourceRef="UserTask_ResubmitProposal" targetRef="ServiceTask_ValidateFormAndRules" />
     <bpmn:sequenceFlow id="Flow_ValidateToGateway" sourceRef="ServiceTask_ValidateFormAndRules" targetRef="Gateway_ValidationPassed" />
-    <bpmn:sequenceFlow id="Flow_ValidationYes" sourceRef="Gateway_ValidationPassed" targetRef="ServiceTask_CheckDuplicateTopic" />
-    <bpmn:sequenceFlow id="Flow_ValidationNo" sourceRef="Gateway_ValidationPassed" targetRef="Gateway_ValidationAttempts" />
+    <bpmn:sequenceFlow id="Flow_ValidationYes" name="Yes" sourceRef="Gateway_ValidationPassed" targetRef="ServiceTask_CheckDuplicateTopic" />
+    <bpmn:sequenceFlow id="Flow_ValidationNo" name="No" sourceRef="Gateway_ValidationPassed" targetRef="Gateway_ValidationAttempts" />
     <bpmn:sequenceFlow id="Flow_AttemptUnderLimit" name="Attempt &lt;= 2" sourceRef="Gateway_ValidationAttempts" targetRef="UserTask_ResubmitProposal" />
     <bpmn:sequenceFlow id="Flow_AttemptExceeded" name="Attempt &gt; 2" sourceRef="Gateway_ValidationAttempts" targetRef="EndEvent_InvalidTeam" />
     <bpmn:sequenceFlow id="Flow_CheckToGateway" sourceRef="ServiceTask_CheckDuplicateTopic" targetRef="Gateway_DuplicateCheck" />
     <bpmn:sequenceFlow id="Flow_PlagiarismNo" name="No" sourceRef="Gateway_DuplicateCheck" targetRef="UserTask_ScreenProposal" />
     <bpmn:sequenceFlow id="Flow_PlagiarismYes" name="Yes" sourceRef="Gateway_DuplicateCheck" targetRef="UserTask_ReviewPlagiarismMatch" />
     <bpmn:sequenceFlow id="Flow_MatchToDecision" sourceRef="UserTask_ReviewPlagiarismMatch" targetRef="UserTask_ModifyTopic" />
-    <bpmn:sequenceFlow id="Flow_PlagiarismReject" sourceRef="UserTask_ReviewPlagiarismMatch" targetRef="EndEvent_RejectedPlagiarism" />
+    <bpmn:sequenceFlow id="Flow_TopicModifiedToScreen" sourceRef="UserTask_ModifyTopic" targetRef="UserTask_ScreenProposal" />
+    <bpmn:sequenceFlow id="Flow_PlagiarismReject" name="Reject" sourceRef="UserTask_ReviewPlagiarismMatch" targetRef="EndEvent_RejectedPlagiarism" />
     <bpmn:sequenceFlow id="Flow_ScreenToCommittee" sourceRef="UserTask_ScreenProposal" targetRef="UserTask_EvaluateProposal" />
-    <bpmn:sequenceFlow id="Flow_LateRequestApproved" sourceRef="UserTask_HandleSubmissionDeadline" targetRef="UserTask_EvaluateProposal" />
-    <bpmn:sequenceFlow id="Flow_SLAToReminder" sourceRef="BoundaryTimer_ReviewSLA" targetRef="SendTask_SendReviewReminder" />
-    <bpmn:sequenceFlow id="Flow_TimerToEscalation" sourceRef="BoundaryTimer_ReviewEscalation" targetRef="UserTask_ScreenProposal" />
     <bpmn:sequenceFlow id="Flow_EvaluateToGateway" sourceRef="UserTask_EvaluateProposal" targetRef="Gateway_CommitteeDecision" />
     <bpmn:sequenceFlow id="Flow_Approved" name="Approve" sourceRef="Gateway_CommitteeDecision" targetRef="BusinessRuleTask_CheckGuideAvailability" />
     <bpmn:sequenceFlow id="Flow_Revise" name="Revise" sourceRef="Gateway_CommitteeDecision" targetRef="SubProcess_RevisionLoop" />
@@ -312,36 +266,34 @@
     <bpmn:sequenceFlow id="Flow_GuideTimeout" sourceRef="BoundaryTimer_GuideResponseTimeout" targetRef="UserTask_ManualGuideAllocation" />
     <bpmn:sequenceFlow id="Flow_FinalizationToNotify" sourceRef="SubProcess_AllocationFinalization" targetRef="SendTask_NotifyStudentAndRecord" />
     <bpmn:sequenceFlow id="Flow_NotifyToDone" sourceRef="SendTask_NotifyStudentAndRecord" targetRef="EndEvent_ProjectAllocated" />
-    <bpmn:sequenceFlow id="Flow_SystemFailureFallback" sourceRef="BoundaryError_SystemFailure" targetRef="UserTask_ManualNotificationFallback" />
-    <bpmn:sequenceFlow id="Flow_FallbackToDone" sourceRef="UserTask_ManualNotificationFallback" targetRef="EndEvent_ProjectAllocated" />
 
   </bpmn:process>
 
   <bpmn:error id="Error_InvalidTeam" name="ERR_INVALID_TEAM" errorCode="ERR_INVALID_TEAM" />
-  <bpmn:error id="Error_SystemFailure" name="ERR_SYSTEM_FAILURE" errorCode="ERR_SYSTEM_FAILURE" />
 
-  <!-- Diagram Interchange Coordinates -->
+  <!-- Diagram Interchange Coordinates and Visual Edges -->
   <bpmndi:BPMNDiagram id="BPMNDiagram_StudentProject">
     <bpmndi:BPMNPlane id="BPMNPlane_StudentProject" bpmnElement="Collaboration_StudentProject">
+      
       <bpmndi:BPMNShape id="Participant_StudentProjectProcess_di" bpmnElement="Participant_StudentProjectProcess" isHorizontal="true">
-        <dc:Bounds x="160" y="80" width="1680" height="980" />
+        <dc:Bounds x="160" y="80" width="1700" height="980" />
       </bpmndi:BPMNShape>
       
       <!-- Lanes -->
       <bpmndi:BPMNShape id="Lane_Student_di" bpmnElement="Lane_Student" isHorizontal="true">
-        <dc:Bounds x="190" y="80" width="1650" height="200" />
+        <dc:Bounds x="190" y="80" width="1670" height="200" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_Coordinator_di" bpmnElement="Lane_Coordinator" isHorizontal="true">
-        <dc:Bounds x="190" y="280" width="1650" height="190" />
+        <dc:Bounds x="190" y="280" width="1670" height="190" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_Committee_di" bpmnElement="Lane_Committee" isHorizontal="true">
-        <dc:Bounds x="190" y="470" width="1650" height="220" />
+        <dc:Bounds x="190" y="470" width="1670" height="220" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_Guide_di" bpmnElement="Lane_Guide" isHorizontal="true">
-        <dc:Bounds x="190" y="690" width="1650" height="170" />
+        <dc:Bounds x="190" y="690" width="1670" height="170" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_System_di" bpmnElement="Lane_System" isHorizontal="true">
-        <dc:Bounds x="190" y="860" width="1650" height="200" />
+        <dc:Bounds x="190" y="860" width="1670" height="200" />
       </bpmndi:BPMNShape>
 
       <!-- Shapes -->
@@ -361,19 +313,28 @@
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_ValidationAttempts_di" bpmnElement="Gateway_ValidationAttempts" isMarkerVisible="true">
-        <dc:Bounds x="385" y="870" width="50" height="50" />
+        <dc:Bounds x="385" y="850" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="300" y="865" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="UserTask_ResubmitProposal_di" bpmnElement="UserTask_ResubmitProposal">
         <dc:Bounds x="360" y="130" width="100" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:EndEvent id="EndEvent_InvalidTeam_di" bpmnElement="EndEvent_InvalidTeam">
+      <bpmndi:BPMNShape id="EndEvent_InvalidTeam_di" bpmnElement="EndEvent_InvalidTeam">
         <dc:Bounds x="512" y="152" width="36" height="36" />
-      </bpmndi:EndEvent>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="490" y="195" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="ServiceTask_CheckDuplicateTopic_di" bpmnElement="ServiceTask_CheckDuplicateTopic">
         <dc:Bounds x="490" y="910" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_DuplicateCheck_di" bpmnElement="Gateway_DuplicateCheck" isMarkerVisible="true">
         <dc:Bounds x="645" y="925" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="630" y="982" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="UserTask_ReviewPlagiarismMatch_di" bpmnElement="UserTask_ReviewPlagiarismMatch">
         <dc:Bounds x="620" y="330" width="100" height="80" />
@@ -383,6 +344,9 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_RejectedPlagiarism_di" bpmnElement="EndEvent_RejectedPlagiarism">
         <dc:Bounds x="772" y="152" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="750" y="195" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="UserTask_ScreenProposal_di" bpmnElement="UserTask_ScreenProposal">
         <dc:Bounds x="740" y="330" width="100" height="80" />
@@ -392,18 +356,27 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_CommitteeDecision_di" bpmnElement="Gateway_CommitteeDecision" isMarkerVisible="true">
         <dc:Bounds x="1045" y="545" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1040" y="602" width="60" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="SubProcess_RevisionLoop_di" bpmnElement="SubProcess_RevisionLoop" isExpanded="false">
         <dc:Bounds x="1020" y="420" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_RejectedCommittee_di" bpmnElement="EndEvent_RejectedCommittee">
         <dc:Bounds x="1052" y="152" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1030" y="195" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BusinessRuleTask_CheckGuideAvailability_di" bpmnElement="BusinessRuleTask_CheckGuideAvailability">
         <dc:Bounds x="1160" y="910" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_GuideAvailable_di" bpmnElement="Gateway_GuideAvailable" isMarkerVisible="true">
         <dc:Bounds x="1315" y="925" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1300" y="982" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="UserTask_ManualGuideAllocation_di" bpmnElement="UserTask_ManualGuideAllocation">
         <dc:Bounds x="1290" y="330" width="100" height="80" />
@@ -417,12 +390,192 @@
       <bpmndi:BPMNShape id="UserTask_GuideResponse_di" bpmnElement="UserTask_GuideResponse">
         <dc:Bounds x="1560" y="730" width="100" height="80" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BoundaryTimer_GuideResponseTimeout_di" bpmnElement="BoundaryTimer_GuideResponseTimeout">
+        <dc:Bounds x="1642" y="712" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1630" y="682" width="60" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SubProcess_AllocationFinalization_di" bpmnElement="SubProcess_AllocationFinalization" isExpanded="false">
+        <dc:Bounds x="1700" y="730" width="100" height="80" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="SendTask_NotifyStudentAndRecord_di" bpmnElement="SendTask_NotifyStudentAndRecord">
         <dc:Bounds x="1700" y="910" width="100" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_ProjectAllocated_di" bpmnElement="EndEvent_ProjectAllocated">
-        <dc:Bounds x="1732" y="990" width="36" height="36" />
+        <dc:Bounds x="1732" y="1010" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1710" y="1053" width="80" height="27" />
+        </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
+
+      <!-- Visual Sequence Flow Edges -->
+      <bpmndi:BPMNEdge id="Flow_StartToValidate_di" bpmnElement="Flow_StartToValidate">
+        <di:waypoint x="260" y="188" />
+        <di:waypoint x="260" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ResubmitToValidate_di" bpmnElement="Flow_ResubmitToValidate">
+        <di:waypoint x="360" y="170" />
+        <di:waypoint x="310" y="170" />
+        <di:waypoint x="310" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ValidateToGateway_di" bpmnElement="Flow_ValidateToGateway">
+        <di:waypoint x="330" y="950" />
+        <di:waypoint x="385" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ValidationYes_di" bpmnElement="Flow_ValidationYes">
+        <di:waypoint x="435" y="950" />
+        <di:waypoint x="490" y="950" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="454" y="932" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ValidationNo_di" bpmnElement="Flow_ValidationNo">
+        <di:waypoint x="410" y="925" />
+        <di:waypoint x="410" y="900" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="418" y="908" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AttemptUnderLimit_di" bpmnElement="Flow_AttemptUnderLimit">
+        <di:waypoint x="410" y="850" />
+        <di:waypoint x="410" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="416" y="525" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AttemptExceeded_di" bpmnElement="Flow_AttemptExceeded">
+        <di:waypoint x="435" y="875" />
+        <di:waypoint x="530" y="875" />
+        <di:waypoint x="530" y="188" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="453" y="857" width="59" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CheckToGateway_di" bpmnElement="Flow_CheckToGateway">
+        <di:waypoint x="590" y="950" />
+        <di:waypoint x="645" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PlagiarismNo_di" bpmnElement="Flow_PlagiarismNo">
+        <di:waypoint x="695" y="950" />
+        <di:waypoint x="790" y="950" />
+        <di:waypoint x="790" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="736" y="932" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PlagiarismYes_di" bpmnElement="Flow_PlagiarismYes">
+        <di:waypoint x="670" y="925" />
+        <di:waypoint x="670" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="676" y="665" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_MatchToDecision_di" bpmnElement="Flow_MatchToDecision">
+        <di:waypoint x="670" y="330" />
+        <di:waypoint x="670" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TopicModifiedToScreen_di" bpmnElement="Flow_TopicModifiedToScreen">
+        <di:waypoint x="720" y="170" />
+        <di:waypoint x="760" y="170" />
+        <di:waypoint x="760" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PlagiarismReject_di" bpmnElement="Flow_PlagiarismReject">
+        <di:waypoint x="720" y="370" />
+        <di:waypoint x="790" y="370" />
+        <di:waypoint x="790" y="188" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="740" y="352" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ScreenToCommittee_di" bpmnElement="Flow_ScreenToCommittee">
+        <di:waypoint x="840" y="370" />
+        <di:waypoint x="940" y="370" />
+        <di:waypoint x="940" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EvaluateToGateway_di" bpmnElement="Flow_EvaluateToGateway">
+        <di:waypoint x="990" y="570" />
+        <di:waypoint x="1045" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved">
+        <di:waypoint x="1095" y="570" />
+        <di:waypoint x="1210" y="570" />
+        <di:waypoint x="1210" y="910" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1132" y="552" width="42" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Revise_di" bpmnElement="Flow_Revise">
+        <di:waypoint x="1070" y="545" />
+        <di:waypoint x="1070" y="500" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1073" y="520" width="34" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RejectCommittee_di" bpmnElement="Flow_RejectCommittee">
+        <di:waypoint x="1070" y="545" />
+        <di:waypoint x="1070" y="188" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1074" y="364" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RevisionCompleted_di" bpmnElement="Flow_RevisionCompleted">
+        <di:waypoint x="1120" y="460" />
+        <di:waypoint x="1230" y="460" />
+        <di:waypoint x="1230" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RuleToGateway_di" bpmnElement="Flow_RuleToGateway">
+        <di:waypoint x="1260" y="950" />
+        <di:waypoint x="1315" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_GuideFound_di" bpmnElement="Flow_GuideFound">
+        <di:waypoint x="1365" y="950" />
+        <di:waypoint x="1420" y="950" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1384" y="932" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_GuideNone_di" bpmnElement="Flow_GuideNone">
+        <di:waypoint x="1340" y="925" />
+        <di:waypoint x="1340" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1342" y="665" width="27" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ManualGuideAssigned_di" bpmnElement="Flow_ManualGuideAssigned">
+        <di:waypoint x="1390" y="370" />
+        <di:waypoint x="1470" y="370" />
+        <di:waypoint x="1470" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AllocateToRequest_di" bpmnElement="Flow_AllocateToRequest">
+        <di:waypoint x="1520" y="950" />
+        <di:waypoint x="1560" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RequestToReceive_di" bpmnElement="Flow_RequestToReceive">
+        <di:waypoint x="1610" y="910" />
+        <di:waypoint x="1610" y="810" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_GuideAccepted_di" bpmnElement="Flow_GuideAccepted">
+        <di:waypoint x="1660" y="770" />
+        <di:waypoint x="1700" y="770" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1658" y="752" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_GuideTimeout_di" bpmnElement="Flow_GuideTimeout">
+        <di:waypoint x="1660" y="712" />
+        <di:waypoint x="1660" y="390" />
+        <di:waypoint x="1390" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FinalizationToNotify_di" bpmnElement="Flow_FinalizationToNotify">
+        <di:waypoint x="1750" y="810" />
+        <di:waypoint x="1750" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NotifyToDone_di" bpmnElement="Flow_NotifyToDone">
+        <di:waypoint x="1750" y="990" />
+        <di:waypoint x="1750" y="1010" />
+      </bpmndi:BPMNEdge>
+
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 
